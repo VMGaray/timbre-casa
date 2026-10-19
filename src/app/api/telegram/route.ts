@@ -1,11 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
 import { after } from "next/server";
-import { getSupabase } from "@/lib/supabase";
+import { getSupabase, type Toque } from "@/lib/supabase";
 import { answerCallbackQuery, sendMessage } from "@/lib/telegram";
 import { textoDeCodigo } from "@/lib/textos";
 import {
   actualizarMensajes,
   buscarToque,
+  buscarToqueReciente,
   esDestinatarioActivo,
   estaVigente,
   guardarRespuesta,
@@ -30,6 +31,7 @@ type Update = {
 };
 
 const CALLBACK = /^r:([0-9a-f-]{36}):([a-z])$/;
+const VENTANA_TEXTO_DIRECTO_MS = 10 * 60 * 1000;
 
 function secretoValido(recibido: string | null) {
   const esperado = process.env.TELEGRAM_WEBHOOK_SECRET;
@@ -108,10 +110,16 @@ async function procesarMensaje(msg: NonNullable<Update["message"]>) {
         await sendMessage(chatId, "Este aviso ya expiró ⌛", { reply_to_message_id: msg.message_id });
         return;
       }
-      const respuesta = Array.from(texto).slice(0, 200).join("");
-      await guardarRespuesta(toque.id, respuesta);
-      await sendMessage(chatId, "Respuesta enviada ✅", { reply_to_message_id: msg.message_id });
-      await actualizarMensajes(toque.id);
+      await responderConTexto(toque, texto, chatId, msg.message_id);
+      return;
+    }
+  }
+
+  // Texto suelto (sin reply) que no es comando: responde al toque de los últimos 10 minutos.
+  if (!msg.reply_to_message && texto && !texto.startsWith("/") && esDestinatario) {
+    const toque = await buscarToqueReciente(VENTANA_TEXTO_DIRECTO_MS);
+    if (toque) {
+      await responderConTexto(toque, texto, chatId, msg.message_id);
       return;
     }
   }
@@ -132,6 +140,14 @@ async function procesarMensaje(msg: NonNullable<Update["message"]>) {
       "🔔 Cuando alguien toque, te llega un mensaje solo.",
       "👆 Para contestar, tocá uno de los botones del aviso.",
       "✍️ O respondé (reply) a ese mensaje con el texto que quieras y se lo mostramos a quien está en la puerta.",
+      "💬 En los 10 minutos posteriores al aviso también podés escribir directamente en el chat, sin reply.",
     ].join("\n"),
   );
+}
+
+async function responderConTexto(toque: Toque, texto: string, chatId: number, messageId: number) {
+  const respuesta = Array.from(texto).slice(0, 200).join("");
+  await guardarRespuesta(toque.id, respuesta);
+  await sendMessage(chatId, "Respuesta enviada ✅", { reply_to_message_id: messageId });
+  await actualizarMensajes(toque.id);
 }

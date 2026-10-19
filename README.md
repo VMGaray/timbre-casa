@@ -128,4 +128,5 @@ update timbre.destinatarios set activo = false where chat_id = 123456789;
 - Los avisos de más de 24 h ya no se pueden responder ("Este aviso ya expiró").
 - Si varios destinatarios responden, queda la respuesta más reciente.
 - Las respuestas por reply se recortan a 200 caracteres.
+- Un destinatario también puede escribir un texto directo en el chat (sin reply y sin `/`) en los 10 minutos posteriores a un aviso: se toma como respuesta al toque más reciente. Los comandos (`/start`, etc.) y los textos fuera de esa ventana muestran la ayuda.
 - La hora del aviso se muestra en la zona `America/Argentina/Cordoba`.

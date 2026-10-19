@@ -70,6 +70,20 @@ export async function buscarToque(id: string) {
   return data as Toque | null;
 }
 
+// El toque más reciente, si se creó hace menos de `maxMs`.
+export async function buscarToqueReciente(maxMs: number) {
+  const desde = new Date(Date.now() - maxMs).toISOString();
+  const { data, error } = await getSupabase()
+    .from("toques")
+    .select("*")
+    .gt("created_at", desde)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data as Toque | null;
+}
+
 // Si responden varios, queda la más reciente.
 export async function guardarRespuesta(toqueId: string, respuesta: string) {
   const { error } = await getSupabase()
