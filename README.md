@@ -127,6 +127,7 @@ update timbre.destinatarios set activo = false where chat_id = 123456789;
 
 - Los avisos de más de 24 h ya no se pueden responder ("Este aviso ya expiró").
 - Si varios destinatarios responden, queda la respuesta más reciente.
+- Cuando alguien responde (o cambia la respuesta), los mensajes originales muestran "✅ Respondió <nombre>: …" y al resto de los destinatarios les llega un mensaje nuevo "✅ Ya respondió <nombre>: …". El nombre sale de `timbre.destinatarios.nombre`, solo se ve en Telegram y nunca llega a la página del visitante.
 - Las respuestas por reply se recortan a 200 caracteres.
 - Un destinatario también puede escribir un texto directo en el chat (sin reply y sin `/`) en los 10 minutos posteriores a un aviso: se toma como respuesta al toque más reciente. Los comandos (`/start`, etc.) y los textos fuera de esa ventana muestran la ayuda.
 - La hora del aviso se muestra en la zona `America/Argentina/Cordoba`.

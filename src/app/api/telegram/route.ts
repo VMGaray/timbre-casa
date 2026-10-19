@@ -4,12 +4,13 @@ import { getSupabase, type Toque } from "@/lib/supabase";
 import { answerCallbackQuery, sendMessage } from "@/lib/telegram";
 import { textoDeCodigo } from "@/lib/textos";
 import {
-  actualizarMensajes,
+  buscarDestinatarioActivo,
   buscarToque,
   buscarToqueReciente,
-  esDestinatarioActivo,
+  difundirRespuesta,
   estaVigente,
   guardarRespuesta,
+  type Destinatario,
 } from "@/lib/avisos";
 
 export const runtime = "nodejs";
@@ -73,7 +74,8 @@ async function procesarBoton(cq: NonNullable<Update["callback_query"]>) {
     return;
   }
 
-  if (!(await esDestinatarioActivo(cq.from.id))) {
+  const destinatario = await buscarDestinatarioActivo(cq.from.id);
+  if (!destinatario) {
     await answerCallbackQuery(cq.id, "No autorizado");
     return;
   }
@@ -86,16 +88,16 @@ async function procesarBoton(cq: NonNullable<Update["callback_query"]>) {
 
   await guardarRespuesta(toque.id, respuesta);
   await answerCallbackQuery(cq.id, "Respuesta enviada ✅");
-  await actualizarMensajes(toque.id);
+  await difundirRespuesta(toque, respuesta, destinatario);
 }
 
 async function procesarMensaje(msg: NonNullable<Update["message"]>) {
   const chatId = msg.chat.id;
   const remitente = msg.from?.id ?? chatId;
-  const esDestinatario = await esDestinatarioActivo(remitente);
+  const destinatario = await buscarDestinatarioActivo(remitente);
 
   const texto = msg.text?.trim();
-  if (msg.reply_to_message && texto && esDestinatario) {
+  if (msg.reply_to_message && texto && destinatario) {
     const { data: original, error } = await getSupabase()
       .from("mensajes")
       .select("toque_id")
@@ -110,21 +112,21 @@ async function procesarMensaje(msg: NonNullable<Update["message"]>) {
         await sendMessage(chatId, "Este aviso ya expiró ⌛", { reply_to_message_id: msg.message_id });
         return;
       }
-      await responderConTexto(toque, texto, chatId, msg.message_id);
+      await responderConTexto(toque, texto, destinatario, chatId, msg.message_id);
       return;
     }
   }
 
   // Texto suelto (sin reply) que no es comando: responde al toque de los últimos 10 minutos.
-  if (!msg.reply_to_message && texto && !texto.startsWith("/") && esDestinatario) {
+  if (!msg.reply_to_message && texto && !texto.startsWith("/") && destinatario) {
     const toque = await buscarToqueReciente(VENTANA_TEXTO_DIRECTO_MS);
     if (toque) {
-      await responderConTexto(toque, texto, chatId, msg.message_id);
+      await responderConTexto(toque, texto, destinatario, chatId, msg.message_id);
       return;
     }
   }
 
-  if (!esDestinatario) {
+  if (!destinatario) {
     await sendMessage(
       chatId,
       `Hola 👋 Tu ID es <code>${chatId}</code>. Pasáselo a quien administra el timbre para que te dé de alta.`,
@@ -145,9 +147,15 @@ async function procesarMensaje(msg: NonNullable<Update["message"]>) {
   );
 }
 
-async function responderConTexto(toque: Toque, texto: string, chatId: number, messageId: number) {
+async function responderConTexto(
+  toque: Toque,
+  texto: string,
+  destinatario: Destinatario,
+  chatId: number,
+  messageId: number,
+) {
   const respuesta = Array.from(texto).slice(0, 200).join("");
   await guardarRespuesta(toque.id, respuesta);
   await sendMessage(chatId, "Respuesta enviada ✅", { reply_to_message_id: messageId });
-  await actualizarMensajes(toque.id);
+  await difundirRespuesta(toque, respuesta, destinatario);
 }
